@@ -13,7 +13,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -44,7 +43,6 @@ public class RepositorySizeServiceTest {
         String repoId3 = "sameRepoId";
         long repoSize = testingService.calculateRepoSize(repoId1);
         long repoSize2 = testingService.calculateRepoSize(repoId2);
-        TimeUnit.SECONDS.sleep(1);
         long repoSize3 = testingService.calculateRepoSize(repoId3);
         assertEquals(repoSize, repoSize3);
         assertNotEquals(repoSize, repoSize2);
@@ -62,7 +60,6 @@ public class RepositorySizeServiceTest {
         callables.forEach(
                 testData -> futures.add(executor.submit(testData)
                 ));
-        TimeUnit.SECONDS.sleep(5);
         List<Long> results = extractCalculatedSize(futures);
         assertEquals(results.get(0), results.get(2));
         assertNotEquals(results.get(0), results.get(1));

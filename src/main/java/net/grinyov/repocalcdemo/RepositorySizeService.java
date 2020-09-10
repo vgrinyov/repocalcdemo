@@ -3,6 +3,8 @@ package net.grinyov.repocalcdemo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CompletionService;
@@ -13,6 +15,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 
 public class RepositorySizeService {
@@ -23,6 +26,7 @@ public class RepositorySizeService {
 
     private final ExecutorService executor;
     private final Map<String, Future<Long>> cache;
+    private ReentrantLock lock = new ReentrantLock();
 
     public RepositorySizeService(ExecutorService executor, Map<String, Future<Long>> cache) {
         this.executor = executor;
@@ -34,39 +38,43 @@ public class RepositorySizeService {
             return thread;
         });
         scheduler.scheduleAtFixedRate(() -> {
-            System.out.println("Created the new scheduler and started cleaning process");
+            LOGGER.debug("Created the new scheduler and started cleaning process");
             cache.forEach((key, value) -> {
-                if (value.isDone() || value.isCancelled())  {
-                    System.out.println("The data for repository " + key + "was removed from cache");
+                if (value.isDone() || value.isCancelled()) {
+                    LOGGER.debug("The data for repository {} was removed from cache", key);
                     cache.remove(key);
                 }
             });
-        }, 1, DEFAULT_TIMEOUT/5, TimeUnit.SECONDS);
+        }, 1, DEFAULT_TIMEOUT / 5, TimeUnit.SECONDS);
     }
 
     public long calculateRepoSize(String id) {
-        System.out.println("Started calculating the size of repository " +  id);
-        LOGGER.debug("Started calculating the size of repository {}",  id);
+        LOGGER.debug("Started calculating the size of repository {}", id);
+        lock.lock();
         if (cache.containsKey(id)) {
-            System.out.println("The size of the repository " + id +"  is still being calculated.");
-            LOGGER.debug("The size of the repository {} is still being calculated.", id);
-            return getResult(cache.get(id));
+            try {
+                LOGGER.debug("The size of the repository {} is still being calculated.", id);
+                return getResult(cache.get(id));
+            } finally {
+                lock.unlock();
+            }
         }
         CompletionService<Long> completionService = new ExecutorCompletionService<>(executor);
         Future<Long> future = completionService.submit(() -> {
             // here calculate repo size
-            System.out.println("calculating the size by thread " + Thread.currentThread().getName());
             LOGGER.debug("calculating the size by thread {}", Thread.currentThread().getName());
-            TimeUnit.SECONDS.sleep(3);
-            System.out.println("Finished calculating the size by thread " + Thread.currentThread().getName());
+            List<Integer> woprkList = new ArrayList<>();
+            for (int i = 0; i < 10_000_000; i++) {
+                woprkList.add(new Random().nextInt());
+            }
+            long acc = woprkList.stream()
+                    .sorted()
+                    .reduce(0, Integer::sum);
             LOGGER.debug("Finished calculating the size by thread {}", Thread.currentThread().getName());
-            return Math.abs(new Random().nextLong());
+            return Math.abs(acc);
         });
         cache.putIfAbsent(id, future);
-        while (!future.isDone()) {
-            return getResult(future);
-        }
-        return 0;
+        return getResult(future);
     }
 
     private long getResult(Future<Long> future) {
